@@ -20,18 +20,6 @@
 breed [red-flowers red-flower] ;; flower breeds- flowers are red or blue and can become "empty-flowers" (a new breed)
 breed [blue-flowers blue-flower]
 
-red-flowers-own [
-  eaten-by-red-forager
-  eaten-by-blue-forager
-  eaten-by-generalist-forager ]
-;; I will add the pollen types here for phase 2 - each flower will have pollen variables introduced here.
-
-blue-flowers-own [
-  eaten-by-red-forager
-  eaten-by-blue-forager
-  eaten-by-generalist-forager ]
-
-
 breed [empty-red-flowers empty-red-flower]
 breed [empty-blue-flowers empty-blue-flower]
 
@@ -78,33 +66,63 @@ patches-own [
 ]
 
 
+red-flowers-own [
+  eaten-by-red-forager
+  eaten-by-blue-forager
+  eaten-by-generalist-forager ]
+;; I will add the pollen types here for phase 2 - each flower will have pollen variables introduced here.
+
+blue-flowers-own [
+  eaten-by-red-forager
+  eaten-by-blue-forager
+  eaten-by-generalist-forager ]
+
+
+;; Set Up Procedure
+
 to setup ;; set up now contains set-up number-of-blue-flowers and number-of-red-flowers
   clear-all
   ask patches [ setup-nest ]
-
+  
   let number-of-blue-flowers (blue-ratio * total-flowers)    ;; Unlike our last model, number of blue flowers is going to be a ratio of our red flowers
   let number-of-red-flowers  total-flowers - number-of-blue-flowers
-
-  create-blue-flowers number-of-blue-flowers [
+  
+  
+    create-red-flowers number-of-red-flowers [
     setxy random-xcor random-ycor
     set shape "flower"
-    set size 10
-    set eaten-by-generalist-forager 0
-    set eaten-by-blue-forager 0
-    set empty-flower-time flower-refilling-time
-  ]
-
-  create-red-flowers number-of-red-flowers [
-    setxy random-xcor random-ycor
-    set shape "flower"
+    set color red
     set size 10
     set eaten-by-generalist-forager 0
     set eaten-by-red-forager 0
     set empty-flower-time flower-refilling-time
   ]
+  
+  create-blue-flowers number-of-blue-flowers [
+    setxy random-xcor random-ycor
+    set shape "flower"
+    set color blue
+    set size 10
+    set eaten-by-generalist-forager 0
+    set eaten-by-blue-forager 0
+    set empty-flower-time flower-refilling-time
+  ]
+  
 
-  setup-generalist-foragers
+    create-generalist-foragers number-of-start-bees [
+    setxy 0 0
+    set size 10
+    set color white
+    set shape "butterfly"
+    set total-flower-visits 0
+    set flower-visits-red 0
+    set flower-visits-blue 0
+    set forager-energy 0
+    set flight-length 0
+    
+  ]
   reset-ticks
+  
 end
 
 
@@ -113,31 +131,16 @@ end
   set nest? (distancexy 0 0) < 5 ;; set nest? Boolean. Nest = TRUE if less than 5 units away from center, FALSE if futher
   set nest-scent 300 - distancexy 0 0 ;; nest scent starts at 300 and decreases with distance from the center
   set nest-energy 0
- ;; set total-patches 0
+  ;; set total-patches 0
   set total-visits-to-flowers 0
-     ifelse nest?
+  ifelse nest?
   [ set pcolor white ]
   [ set pcolor green ]
 
 end
 
-;; Creating the foragers
 
 
-to setup-generalist-foragers
-create-generalist-foragers number-of-start-bees [
-  setxy 0 0
-  set size 10
-  set color white
-  set shape "butterfly"
-  set total-flower-visits 0
-  set flower-visits-red 0
-  set flower-visits-blue 0
-  set forager-energy 0
-    set flight-length 0
-
-]
-end
 
 
 ;; Go Procedure
@@ -148,19 +151,17 @@ to go
   
   ask red-flowers [
     set shape "flower"
-    set color red
+    set color red ]
     ;; no be-eaten logic here, as that is contained in the forager behaviour
-  ]
+  
   
   ask blue-flowers [
     set shape "flower"
-    set color blue
+    set color blue ]
     ;; no be-eaten logic here, as that is contained in the forager behaviour
-  ]
+  
   
   ;; Procedure for when flowers are emptied
-  
-  
   ask empty-red-flowers [
     
     set color red
@@ -200,6 +201,8 @@ to go
     
     ;; if generalists encounter a red flower
     if any? red-flowers-here [
+      if forager-energy > crop-capacity-generalist * 5.814
+       [set breed generalist-drinking-bees]
       ;; bee-level-counters tick up to record one visit
       eat-red-flower ;; bees do the eating logic - "logic" meaning procedure here
       set total-flower-visits total-flower-visits + 1
@@ -211,9 +214,10 @@ to go
       ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
       
       ask red-flowers-here [
-        be-eaten-generalist
         set eaten-by-generalist-forager eaten-by-generalist-forager + 1
-    ]]
+        be-eaten-generalist
+    ]
+    ]
     
     ;; if generalists encounter a blue flower
     if any? blue-flowers-here [
@@ -232,14 +236,15 @@ to go
         set eaten-by-generalist-forager eaten-by-generalist-forager + 1
       ]
     ]
-  ]
+  
   
   
   ask red-foragers [  
     set size 10
     set color red
     set shape "butterfly"
-    
+        move-levy-flight
+      
     ;; if red foragers encounter a red flower
     if any? red-flowers-here [
       ;; bee-level-counters tick up to record one visit
@@ -253,9 +258,11 @@ to go
       ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
       
       ask red-flowers-here [
-        be-eaten-red
         set eaten-by-red-forager eaten-by-red-forager + 1
-    ]]
+        be-eaten-red
+    ]
+    ]
+      
     set  time-until-strategy-switch forager-patience
     if  time-until-strategy-switch > 0 [
       set time-until-strategy-switch  time-until-strategy-switch  - 1 
@@ -277,6 +284,8 @@ to go
     set size 10
     set color blue
     set shape "butterfly"
+         move-levy-flight
+      
     ;; if blue foragers encounter a red flower
     if any? blue-flowers-here [
       ;; bee-level-counters tick up to record one visit
@@ -290,16 +299,18 @@ to go
       ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
       
       ask blue-flowers-here [
-        be-eaten-blue
         set eaten-by-blue-forager eaten-by-blue-forager + 1
-    ]]
+        be-eaten-blue
+    ]
+      ]
+        
     set  time-until-strategy-switch forager-patience
     if  time-until-strategy-switch > 0 [
       set time-until-strategy-switch  time-until-strategy-switch  - 1 
       
-      if forager-energy > (crop-capacity-red * 5.814) 
-      ;; bee is full: become a red-drinking-bee
-      [ set breed red-drinking-bees
+      if forager-energy > (crop-capacity-blue * 5.814) 
+      ;; if bee is not full and forager energy is smaller than: become a red-drinking-bee
+      [ set breed blue-drinking-bees
       ]
       
       if time-until-strategy-switch = 0 [
@@ -322,8 +333,9 @@ to go
       ;; bee has run out of patience: become a generalist-forager
       set breed generalist-foragers
       set forager-patience forager-patience 
+      ]]
     ]
-  ]
+  
   
   ;; Drinking-bees 
   
@@ -331,6 +343,23 @@ to go
     set color white
     set shape "butterfly"
     set size 10
+    
+        ;; if generalists encounter a red flower
+    if any? red-flowers-here [ 
+      eat-red-flower 
+      ask red-flowers-here [
+      be-eaten-generalist
+      ]
+    ]
+    
+            ;; if generalists encounter a blue flower
+    if any? blue-flowers-here [ 
+      eat-blue-flower 
+      ask blue-flowers-here [
+        be-eaten-generalist 
+      ]
+    ]
+      
     set drinking-time drinking-time - 1 ;; bees are forced to drink for ten ticks and drinking-time reduces by 1 every tick
     if drinking-time = 0 [ ;; decide whether to return or keep foraging 
                            ;;if ten ticks have passed and drinking time reaches 0, bee is forced to decide if full [
@@ -385,7 +414,7 @@ to go
   ;; Return foragers
   ask generalist-return-foragers [
     wiggle
-    move
+    move-levy-flight
     set size 10
     set color white
     set shape "butterfly"
@@ -397,7 +426,7 @@ to go
   
   ask red-return-foragers [
     wiggle
-    move
+    move-levy-flight
     set size 10
     set color red
     set shape "butterfly"
@@ -412,7 +441,7 @@ to go
   
   ask blue-return-foragers [
     wiggle
-    move
+    move-levy-flight
     set size 10
     set color blue
     set shape "butterfly"
@@ -463,7 +492,9 @@ to go
       if random 100 > probability-of-constancy [ set breed generalist-foragers]
       reset-times ]
     [ unload-blue ]]
+  
   ;; Last line of go procedure requires tick
+  
   tick
 end
   
@@ -650,16 +681,14 @@ ask target [ set breed blue-foragers ]
 end
 
 to be-eaten-red ;; this is a procedure run by red-flowers when they are eaten, that changes their breed to an empty flower
-  if any? red-drinking-bees-here or any? generalist-drinking-bees-here [
     set breed empty-red-flowers
-  ]
+  
 end
 
 
-to be-eaten-blue ;; this is a procedure run by blue flowers when they are eaten, turning their breed to an empty blue flower
-  if any? blue-drinking-bees-here or any? generalist-drinking-bees-here [
+to be-eaten-blue  ;; this is a procedure run by blue flowers when they are eaten, turning their breed to an empty blue flower
     set breed empty-blue-flowers
-  ]
+  
 end
 
 
@@ -751,7 +780,7 @@ end
     <slider x="265" step="1" y="70" max="100" width="250" display="red-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="red-pollen-grains" units="grains"></slider>
     <slider x="265" step="1" y="130" max="100" width="250" display="blue-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="blue-pollen-grains" units="grains"></slider>
     <slider x="5" step="100" y="130" max="10000" width="250" display="total-flowers" height="50" min="0" direction="Horizontal" default="1600.0" variable="total-flowers" units="flowers"></slider>
-    <slider x="5" step="1" y="190" max="10000" width="250" display="flower-refilling-time" height="50" min="0" direction="Horizontal" default="10000.0" variable="flower-refilling-time" units="seconds"></slider>
+    <slider x="5" step="1" y="190" max="10000" width="250" display="flower-refilling-time" height="50" min="0" direction="Horizontal" default="2723.0" variable="flower-refilling-time" units="seconds"></slider>
     <slider x="5" step="0.002" y="375" max="0.064" width="250" display="MetabolicCosts" height="50" min="0.016" direction="Horizontal" default="0.032" variable="MetabolicCosts"></slider>
     <slider x="5" step="0.1" y="430" max="3" width="250" display="levy-mu" height="50" min="0" direction="Horizontal" default="2.0" variable="levy-mu"></slider>
     <slider x="265" step="0.1" y="190" max="10" width="250" display="reward-size-red-flowers" height="50" min="0" direction="Horizontal" default="5.0" variable="reward-size-red-flowers" units="μl"></slider>
