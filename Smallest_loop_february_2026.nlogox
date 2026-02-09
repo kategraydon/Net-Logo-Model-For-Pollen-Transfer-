@@ -1,68 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.2" snapToGrid="true">
-  <code><![CDATA[globals [ 
-  nest-energy ;; we use nest energy as a measure of colony success and foraging efficiency Kunin & Iwasa, 1996
+  <code><![CDATA[globals [
+  nest-energy
   nest-pollen
-  
-  foraging-trips-generalist-foragers  
-  foraging-trips-red-bees
-  foraging-trips-blue-bees
- 
-  total-visits-to-flowers
-  total-visits-to-red-flowers
-  total-visits-to-blue-flowers
-  
-  logisticA
-  logisticB
-  
-   move-count
-   move-levy-count
-
 ]
-
-breed [red-flowers red-flower] ;; flower breeds- flowers are red or blue and can become "empty-flowers" (a new breed)
-breed [blue-flowers blue-flower]
-
-breed [empty-red-flowers empty-red-flower]
-breed [empty-blue-flowers empty-blue-flower]
 
 breed [generalist-foragers generalist-forager]
-breed [red-foragers red-forager] ;; bee breeds - bees can be "foragers", "drinking-bees", "return-foragers", "inside-nest-workers", "influencers", "return-stop-foragers".
+breed [red-foragers red-forager] 
 breed [blue-foragers blue-forager]
 
-breed [generalist-drinking-bees generalist-drinking-bee]
-breed [red-drinking-bees red-drinking-bee]
-breed [blue-drinking-bees blue-drinking-bee]
-
-breed [generalist-return-foragers generalist-return-forager]
-breed [red-return-foragers red-return-forager]
-breed [blue-return-foragers  blue-return-forager]
-
-breed [generalist-inside-nest-workers generalist-inside-nest-worker]
-breed [red-inside-nest-workers red-inside-nest-worker]
-breed [blue-inside-nest-workers blue-inside-nest-worker]
-
-breed [red-stop-foragers red-stop-forager] ;; this code converts red forgagers to generalist foragers according to %likelihood of within-trip-constancy
-breed [blue-stop-foragers blue-stop-forager]
-
-turtles-own [ 
-  forager-energy
-  inside-nest-stay-time
-  empty-flower-time
-  drinking-time
-  time-until-strategy-switch
-  red-forager-pollen
-  blue-forager-pollen
-  total-flower-visits
-  flower-visits-red
-  flower-visits-blue
-  flight-length
-  record-visit-generalist
-  red-visited-by-generalist
-  blue-visited-by-generalist
-  moved-this-tick?
+flowers-own [ 
+  color-type 
+  nectar
 ]
 
+red-flowers-own [
+  red-pollen
+  blue-pollen
+  eaten-by-red-forager
+  eaten-by-blue-forager ;; should be 0 , just in here to check the model is working as intended
+  eaten-by-generalist-forager 
+]
+
+blue-flowers-own [
+  red-pollen
+  blue-pollen
+  eaten-by-red-forager ;; should be 0 , just in here to check the model is working as intended
+  eaten-by-blue-forager
+  eaten-by-generalist-forager
+]
+
+turtles-own [
+  red-forager-pollen
+  blue-forager-pollen
+]
 
 patches-own [
   nest-scent
@@ -70,35 +41,55 @@ patches-own [
 ]
 
 
-red-flowers-own [
-  eaten-by-red-forager
-  eaten-by-blue-forager
-  eaten-by-generalist-forager ]
-;; I will add the pollen types here for phase 2 - each flower will have pollen variables introduced here.
+;; Setup Procedure - the setup procedure is everything you want to happen once at the start of the run
 
-blue-flowers-own [
-  eaten-by-red-forager
-  eaten-by-blue-forager
-  eaten-by-generalist-forager ]
-
-
-;; Set Up Procedure
-
-to setup ;; set up now contains set-up number-of-blue-flowers and number-of-red-flowers
+to setup 
   clear-all
-  ask patches [ setup-nest ]
-  
-  let number-of-blue-flowers (blue-ratio * total-flowers)    ;; Unlike our last model, number of blue flowers is going to be a ratio of our red flowers
+  setup-globals
+  setup-nest
+  setup-flowers
+  setup-bees
+  reset-ticks
+end
+
+;; Setup colony-level counters and parameters that are not sliders
+
+to setup-globals
+  set nest-energy 0
+  set nest-pollen 0
+  set total-visits-flowers 0
+  set total-visits-red-flowers 0
+  set total-visits-blue-flowers 0
+end
+
+;; Setup the environment - the green world and nest with nest scent
+
+to setup-nest
+  set nest? (distancexy 0 0) < 5
+  set nest-scent 300 - distancexy 0 0                            
+  set nest-energy 0
+  set total-patches 0                   ;; why do we need a measure for total patches? can I delete?
+  set total-empty-flowers 0
+  set total-visits 0
+     ifelse nest?
+  [ set pcolor white ]
+  [ set pcolor green ]
+end
+
+;; Setup the flowers - number, position, colours, reward sizes, pollen loads
+
+to setup-flowers
+  let number-of-blue-flowers (blue-ratio * total-flowers)    ;; Unlike earlier models, number of blue flowers is going to be a ratio of our red flowers
   let number-of-red-flowers  total-flowers - number-of-blue-flowers
   
-  
-    create-red-flowers number-of-red-flowers [
+   create-red-flowers number-of-red-flowers [
     setxy random-xcor random-ycor
     set shape "flower"
     set color red
     set size 10
     set eaten-by-generalist-forager 0
     set eaten-by-red-forager 0
+    set eaten-by-blue-forager 0 ;; (should remain 0 - include for sense)
     set empty-flower-time flower-refilling-time
   ]
   
@@ -109,85 +100,55 @@ to setup ;; set up now contains set-up number-of-blue-flowers and number-of-red-
     set size 10
     set eaten-by-generalist-forager 0
     set eaten-by-blue-forager 0
+    set eaten-by-red-forager 0 ;; (should remain 0 - include for sense)
     set empty-flower-time flower-refilling-time
   ]
-  
+end
 
-    create-generalist-foragers number-of-start-bees [
-    setxy 0 0
-    set size 10
+;; Setup bees
+
+to bees
+  create-generalist-foragers number-of-start-bees [
+    setxy 0 0 
+    set size 10 
     set color white
     set shape "butterfly"
     set total-flower-visits 0
     set flower-visits-red 0
     set flower-visits-blue 0
-    set forager-energy 0
-    set flight-length 0
-    
+    set forager-energy 0 
   ]
-  reset-ticks
-  
 end
-
-
-;; Creating the nest
- to setup-nest
-  set nest? (distancexy 0 0) < 5 ;; set nest? Boolean. Nest = TRUE if less than 5 units away from center, FALSE if futher
-  set nest-scent 300 - distancexy 0 0 ;; nest scent starts at 300 and decreases with distance from the center
-  set nest-energy 0
-  ;; set total-patches 0
-  set total-visits-to-flowers 0
-  ifelse nest?
-  [ set pcolor white ]
-  [ set pcolor green ]
-
-end
-
-
-
 
 ;; Go Procedure
 
 to go
   
-  ask turtles [ set moved-this-tick? false ]
-  ;; reset counters to 0
+ ;; Go procedures for flowers - to retain their shape when they have nectar
   
-  
-  set move-count 0
-  set move-levy-count 0
-  ;; rest of go ...
-
-  
-;; Go procedure for flowers - is th
-  
-  ask red-flowers [
-    set shape "flower"
+  ask red-flower [
+   set shape "flower"
     set color red ]
-    ;; no be-eaten logic here, as that is contained in the forager behaviour
-  
-  
-  ask blue-flowers [
-    set shape "flower"
-    set color blue ]
-    ;; no be-eaten logic here, as that is contained in the forager behaviour
-  
-  
-  ;; Procedure for when flowers are emptied
-  ask empty-red-flowers [
     
-    set color red
+    ask blue-flower
+    set shape "flower"
+  set color blue ]
+
+;; empty procedure for when flowers have no nectar
+    
+ask empty-red-flowers [
+  
+  
+   set color red
     set shape "x"
     set size 10
     if empty-flower-time > 0 [
       set empty-flower-time empty-flower-time - 1 ]
     if empty-flower-time = 0
     [set breed red-flowers
-      ; set patch-distance distancexy 0 0 
-      ; set patch-distance-red distancexy 0 0
-      reset-times ] ]
+      reset-empty-time ] ]
   
-  ask empty-blue-flowers [
+      ask empty-blue-flowers [
     
     set color blue
     set shape "x"
@@ -196,622 +157,79 @@ to go
       set empty-flower-time empty-flower-time - 1 ]
     if empty-flower-time = 0
     [set breed blue-flowers
-      ; set patch-distance distancexy 0 0
-      ; set patch-distance-blue distancexy 0 0
-      reset-times ] ]
-
-  ;; Create foragers, then drinking-bees (previously return-stop-foragers), then return-foragers, then inside-nest-workers
-  ;; Make sure your counters align with who is doing what
-  
-  ;; Foragers (Generalist, Red and Blue)
-  
-  ask generalist-foragers [
-    set size 10
-    set color white
-    set shape "butterfly"
-   safe-move-levy-flight
-    
-    ;; if generalists encounter a red flower
-    if any? red-flowers-here [
-      if forager-energy > crop-capacity-generalist * 5.814
-       [set breed generalist-drinking-bees]
-      ;; bee-level-counters tick up to record one visit
-      eat-red-flower ;; bees do the eating logic - "logic" meaning procedure here
-      set total-flower-visits total-flower-visits + 1
-      set flower-visits-red flower-visits-red + 1
-      
-      ;; global-level-counters tick up to record overall that red has been visited once
-      set total-visits-to-flowers total-visits-to-flowers + 1
-      set total-visits-to-red-flowers total-visits-to-red-flowers + 1
-      ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
-      
-      ask red-flowers-here [
-        set eaten-by-generalist-forager eaten-by-generalist-forager + 1
-        be-eaten-generalist
-    ]
-    ]
-    
-    ;; if generalists encounter a blue flower
-    if any? blue-flowers-here [
-      ;; bee-level-counters tick up to record one visit
-      eat-blue-flower ;; bees do the eating logic - "logic" meaning procedure here
-      set total-flower-visits total-flower-visits + 1
-      set flower-visits-blue flower-visits-blue + 1
-      
-      ;; global-level-counters tick up to record overall that red has been visited once
-      set total-visits-to-flowers total-visits-to-flowers + 1
-      set total-visits-to-blue-flowers total-visits-to-blue-flowers + 1
-      ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
-      
-      ask blue-flowers-here [
-        be-eaten-generalist
-        set eaten-by-generalist-forager eaten-by-generalist-forager + 1
-      ]
-    ]
-  
-  
-  
-  ask red-foragers [  
-    set size 10
-    set color red
-    set shape "butterfly"
-        safe-move-levy-flight
-      
-    ;; if red foragers encounter a red flower
-    if any? red-flowers-here [
-      ;; bee-level-counters tick up to record one visit
-      eat-red-flower ;; bees do the eating logic - "logic" meaning procedure here
-      set total-flower-visits total-flower-visits + 1
-      set flower-visits-red flower-visits-red + 1
-      
-      ;; global-level-counters tick up to record overall that red has been visited once
-      set total-visits-to-flowers total-visits-to-flowers + 1
-      set total-visits-to-red-flowers total-visits-to-red-flowers + 1
-      ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
-      
-      ask red-flowers-here [
-        set eaten-by-red-forager eaten-by-red-forager + 1
-        be-eaten-red
-    ]
-        ;; IMPORTANT: exit this tick so they don't also run the patience logic
-        stop
-    ]
-      
-  ;; if they didn't land on a flower this tick, do patience logic
-  set time-until-strategy-switch forager-patience
-  if time-until-strategy-switch > 0 [
-    set time-until-strategy-switch time-until-strategy-switch - 1 
-    if forager-energy > (crop-capacity-red * 5.814) [
-      set breed red-drinking-bees
-    ]
-    if time-until-strategy-switch = 0 [
-      set breed generalist-foragers
-      set forager-patience forager-patience 
-    ]
-  ]
-]
-  
-  ask blue-foragers [
-    set size 10
-    set color blue
-    set shape "butterfly"
-         safe-move-levy-flight
-      
-    ;; if blue foragers encounter a red flower
-    if any? blue-flowers-here [
-      ;; bee-level-counters tick up to record one visit
-      eat-blue-flower ;; bees do the eating logic - "logic" meaning procedure here
-      set total-flower-visits total-flower-visits + 1
-      set flower-visits-red flower-visits-red + 1
-      
-      ;; global-level-counters tick up to record overall that red has been visited once
-      set total-visits-to-flowers total-visits-to-flowers + 1
-      set total-visits-to-blue-flowers total-visits-to-blue-flowers + 1
-      ;; flowers run procedure that is "be eaten" and mark flower as eaten (flower-level-counters tick up to record a visit)
-      
-      ask blue-flowers-here [
-        set eaten-by-blue-forager eaten-by-blue-forager + 1
-        be-eaten-blue
-    ]
-      ]
-        
-       ;; IMPORTANT: exit this tick so they don't also run the patience logic
-        stop
-    ]
-      
-  ;; if they didn't land on a flower this tick, do patience logic
-  set time-until-strategy-switch forager-patience
-  if time-until-strategy-switch > 0 [
-    set time-until-strategy-switch time-until-strategy-switch - 1 
-    if forager-energy > (crop-capacity-red * 5.814) [
-      set breed blue-drinking-bees
-    ]
-    if time-until-strategy-switch = 0 [
-      set breed generalist-foragers
-      set forager-patience forager-patience 
-    ]
-  ]
-]
-  
-  
-  ;; Drinking-bees 
-  
-  ask generalist-drinking-bees [
-    set color white
-    set shape "butterfly"
-    set size 10
- 
-      
-    set drinking-time drinking-time - 1 ;; bees are forced to drink for ten ticks and drinking-time reduces by 1 every tick
-    if drinking-time = 0 [ ;; decide whether to return or keep foraging 
-                           ;;if ten ticks have passed and drinking time reaches 0, bee is forced to decide if full [
-      if forager-energy >= (crop-capacity-generalist * 5.814)  ;; if forager energy is larger or equal to maximum energy from filling it's crop up again, it's time to return home
-                                                               ;; forager energy is the bee's current energy in J
-                                                               ;; crop-capacity-generalist is the maximum energy yield it could still gain from filling it's crop 
-                                                               ;; Conversion of 25 µl into 145.35 J so to convert µl to J, you multiply by 5.814
-                                                               ;; 25 mu liter is 145.35 J
-      [set breed generalist-return-foragers] 
-      ;; if drinking-time > 0 be will automatically remain a generalist-drinking-bee until ticks reduce drinking time to 0
-      if forager-energy < (crop-capacity-generalist * 5.814) ;; if there is still more energy to be gained by foraging
-      [set breed generalist-foragers
-      ] ;; the bee can return to foraging
-    ]
-  ]
-  ;; same logic used for red and blue bees
-  
-  ask red-drinking-bees [
-    set color red
-    set shape "butterfly"
-    set size 10
-    set drinking-time drinking-time - 1  ;; one step of drinking
-    
-    if drinking-time = 0 [
-      ;; decide whether to return or keep foraging
-      if forager-energy >= (crop-capacity-red * 5.814) [
-        set breed red-return-foragers
-      ]
-      if forager-energy < (crop-capacity-red * 5.814) [
-        set breed red-foragers
-      ]
-    ]
-  ]
-  
-  ask blue-drinking-bees [
-    set color blue
-    set shape "butterfly"
-    set size 10   
-    set drinking-time drinking-time - 1  ;; one step of drinking
-    
-    if drinking-time = 0 [
-      ;; decide whether to return or keep foraging
-      if forager-energy >= (crop-capacity-blue * 5.814) [
-        set breed blue-return-foragers
-      ]
-      if forager-energy < (crop-capacity-blue * 5.814) [
-        set breed blue-foragers
-      ]
-    ]
-  ]
-  
-  ;; Return foragers
-  ask generalist-return-foragers [
-    wiggle
-    move
-    set size 10
-    set color white
-    set shape "butterfly"
-    set inside-nest-stay-time nest-stay-time
-    return-to-nest
-    if pcolor = white [
-      set breed generalist-inside-nest-workers
-  ]]
-  
-  ask red-return-foragers [
-    wiggle
-    move
-    set size 10
-    set color red
-    set shape "butterfly"
-    set inside-nest-stay-time nest-stay-time
-    return-to-nest
-    if pcolor = white [
-      ;; ifelse random-float recruitment-is-1 < recruitment-probability-red        ;; with recruitment, use 1 if not using the slider
-      
-      ;;  [ set breed red-influencers]
-      set breed red-inside-nest-workers ]]
-  
-  
-  ask blue-return-foragers [
-    wiggle
-    move
-    set size 10
-    set color blue
-    set shape "butterfly"
-    set inside-nest-stay-time nest-stay-time
-    return-to-nest
-    if pcolor = white [
-      ;;   ifelse random-float recruitment-is-1 < recruitment-probability-blue  ;; with recruitment, use 1 if not using the slider
-      ;;  [ set breed blue-influencers]
-      set breed blue-inside-nest-workers ]]
-  
-  
-  ;; Inside-nest-workers
-  
-  ask generalist-inside-nest-workers [
-    set color white
-    move-inside-nest
-    wiggle
-    set shape "butterfly"
-    set size 10
-    set inside-nest-stay-time inside-nest-stay-time - 1
-    if inside-nest-stay-time < 0
-    [set breed generalist-foragers
-      unload-generalist ]]
-  
-  ask red-inside-nest-workers [
-    set color red
-    move-inside-nest
-    wiggle
-    set shape "butterfly"
-    set size 10
-    set inside-nest-stay-time inside-nest-stay-time - 1
-    ifelse inside-nest-stay-time < 0
-    [set breed red-foragers
-      if random 100 > probability-of-constancy [ set breed generalist-foragers]
-      reset-times ]
-    [ unload-red ]]
-  
-  
-  ask blue-inside-nest-workers [
-    set color blue
-    move-inside-nest
-    wiggle
-    set shape "butterfly"
-    set size 10
-    set inside-nest-stay-time inside-nest-stay-time - 1
-    ifelse inside-nest-stay-time < 0
-    [set breed blue-foragers
-      if random 100 > probability-of-constancy [ set breed generalist-foragers]
-      reset-times ]
-    [ unload-blue ]]
-  
-  ;; Last line of go procedure requires tick
-  
-  tick
-end
-  
-;; Flower behavioural programming
-
-to be-eaten-generalist
-   ;; this section of code just tells the flower to record visit 
-    set record-visit-generalist record-visit-generalist + 1 
-end
-
-;; Bee Behavioural Programming
-
-to safe-move-levy-flight
-  if moved-this-tick? [ stop ]
-  set moved-this-tick? true
-  move-levy-flight
-end
-
-
-;; Code to eat flowers: Foragers pick up energy and pollen. Flower visit count is increased by one each time.
-
-;; Eat red flower
-
-to eat-red-flower
-  if any? red-flowers-here [
-    set red-forager-pollen red-forager-pollen + red-pollen-grains ;;foraging bees pick up pollen! The amount is set by a slider on the interface.
-    set forager-energy forager-energy + (reward-size-red-flowers * 5.814) ;; give the bee that's eating energy from the nectar
-    set drinking-time 60     ;; give them a pause where they are forced to stop and drink
-    ;; drinking time set at 60 ticks under default conditions (Hayes & Grueter, 2022)
-    
-    ifelse random 100 < within-trip-constancy [  ;; we are generating a random number between 1 and 100.If that number is smaller than the % likelihood of becoming constant (ie it's 15% likely)
-      ;;a bee will become florally constant within the trip, and a random number less than 15 is generated (will only occur in 15% of cases)
-      set breed red-drinking-bees
-    ] [
-      set breed generalist-drinking-bees ;; breed will be changed to be  a florally constant bee on a red flower, otherwise remain generalist
-    ] 
-;;    set patches-visited-per-trip patches-visited-per-trip + 1
-  ]
-end
-
-;; Eat blue flower
-
-to eat-blue-flower
-  if any? blue-flowers-here [
-    set flower-visits-blue flower-visits-blue + 1
-    set blue-forager-pollen blue-forager-pollen + blue-pollen-grains ;; foraging bees pick up pollen! The amount is set by a slider on the interface.
-    set forager-energy forager-energy + (reward-size-blue-flowers * 5.814) ;; give the bee that's eating energy from the nectar
-    set drinking-time 60 ;; give them a pause where they are forced to stop and drink
-     ;; drinking time set at 60 ticks under default conditions (Hayes & Grueter, 2022)
-ifelse random 100 < within-trip-constancy  [;; we are generating a random number between 1 and 100
-    set breed blue-drinking-bees ;; if that number is smaller than the % likelihood of becoming constant (ie it's 15% likely
-    ;; a bee will become florally constant within the trip, and a random number less than 15 is generated (will only occur in 15% of cases)
-    ] [
-      set breed generalist-drinking-bees ;; breed will be changed to be  a florally constant bee on a blue flower, otherwise remain generalist
-    ]
-   ;; set patches-visited-per-trip patches-visited-per-trip + 1
-  ]
-end
-
-;; Code random "wiggle"
-
-to wiggle
-right random 50
-left random 50
-end
-
-;; Code "move" - move a small amount each time
-
-to move
-  set move-count move-count + 1
-  
-  forward 1.4  ;; Where does 1.4 come from? Bees fly at a speed of 1.4 patches per tick V(flight) corresponding to a flight speed 
-  ;; of Apis Mellifera 7 m/s (von Frisch, 1967)
-  set forager-energy forager-energy - MetabolicCosts ;; Metabolic cost is set at 0.032 Joule (J) per tick in the default condition 
-  ;; (Heinrich 1975 & Willmer, 2011)
-end
-
-;; Code "Levy Flight"
-to move-levy-flight
-   set move-levy-count move-levy-count + 1
-  set forager-energy forager-energy - MetabolicCosts
-  if flight-length <= 0 [
-    rt random 360
-    set flight-length levy levy-mu
-  ]
-
-  ifelse flight-length < 1.4 [
-    fd flight-length
-    set flight-length 0
-  ][
-    fd 1.4
-    set flight-length flight-length - 1.4
-  ]
-end
-
-
-to-report levy [ p-mu ]
-  let result 0
-  ifelse p-mu <= 1 [
-    set result random-float 100000000000
-  ][
-    ifelse p-mu >= 3 [
-      set result abs random-normal 5 1;0 1
-    ][
-      let a random-float 1
-      set result exp ( ln (a) * (1 / 1 - p-mu))
-    ]
-  ]
-  report result
-end
+    reset-empty-time ] ]
 
 
 
 
-;to record-visit-red                                      ;; procedure runs when flowers become empty
-                                                         ;; when emptied, current-visit-red ticks up by 1, this values is passed on to visited-by-red
- ;   set visited-by-red visited-by-red + 1                      
-  ;  set current-visit-red 0                                      ;; current-visit-red gets set back to 0, ready to tick up again when visited.
-;end
-
-;to record-flower-visit-blue                                   
- ; if current-visit-blue > 0 [
-  ;  set visited-by-red visited-by-red + 1 
-   ; set current-visit-blue 0 ]
-;end
-
-;to  record-visit-generalist-red 
- ; ask red-flowers [
- ;   set red-visited-by-generalist red-visited-by-generalist + 1 ]
-  
-;    ask blue-flowers [
- ;   set blue-visited-by-generalist blue-visited-by-generalist + 1 ]
-;end
-
-;;to  record-visit-generalist-red 
-;;  ask red-flowers [
-;;    set red-visited-by-generalist red-visited-by-generalist + 1 ]
-  
-;;    ask blue-flowers [
-;;    set blue-visited-by-generalist blue-visited-by-generalist + 1 ]
-;;end
-;; Nest procedures: bees returning to the nest
-
-to unload-red                                                      ;; procedure at the nest: transfer forager energy to nest
-  set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
-  set forager-energy 0                                             ;; reset forager-energy to 0 (all energy has been transferred to nest)
-  set nest-pollen nest-pollen + red-forager-pollen
-  set red-forager-pollen 0
-;;  set total-patches total-patches + patches-visited-per-trip
-;;  set patches-visited-per-trip 0
-
-end
-
-
-to unload-blue                                                    ;; procedure at the nest: transfer forager energy to nest
-  set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
-  set forager-energy 0          ;; reset forager-energy to 0 (all energy has been transferred to nest)
-  set nest-pollen nest-pollen + blue-forager-pollen
-  set blue-forager-pollen 0
-;;  set total-patches total-patches + patches-visited-per-trip
-;;  set patches-visited-per-trip 0
-end
-
-to unload-generalist                                               ;; procedure at the nest: transfer forager energy to nest
-  set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
-  set forager-energy 0   ;; reset forager-energy to 0 (all energy has been transferred to nest)
-  set red-forager-pollen 0
-  set blue-forager-pollen 0
-
-;;  set total-patches total-patches + patches-visited-per-trip
-;;  set patches-visited-per-trip 0
-end
-
-to move-inside-nest
-  forward 0.1
-  if pcolor = green [rt 180 ]
-  ;;set forager-energy forager-energy
-end
-
-
-to target-blue-bees
-if any? blue-inside-nest-workers-here [
-let target one-of blue-inside-nest-workers-here
-ask target [ set breed red-foragers ]
-]
-end
-
-to target-red-bees
-  if any? red-inside-nest-workers-here [
-let target one-of red-inside-nest-workers-here
-ask target [ set breed blue-foragers ]
-
-]
-end
-
-to be-eaten-red ;; this is a procedure run by red-flowers when they are eaten, that changes their breed to an empty flower
-    set breed empty-red-flowers
-  
-end
-
-
-to be-eaten-blue  ;; this is a procedure run by blue flowers when they are eaten, turning their breed to an empty blue flower
-    set breed empty-blue-flowers
-  
-end
-
-
-to return-to-nest
-  let scent-ahead nest-scent-at-angle   0
-  let scent-right nest-scent-at-angle  45
-  let scent-left  nest-scent-at-angle -45
-  if (scent-right > scent-ahead) or (scent-left > scent-ahead)
-  [ ifelse scent-right > scent-left
-    [ rt 45 ]
-    [ lt 45 ] ]
-
-
-end
-
-;; REPORTERS
-
-to-report mean-speed [agents]
-  if not any? agents [ report 0 ]
-  report mean [distancexy 0 0] of agents
-end
-
-
-to-report current-nest-pollen ;; We want to report nest pollen because it will give us an idea of how much pollen returns to the nest, given that some is lost between flowers and therefore an idea of nest energy
-  report nest-pollen
-end
-
-to-report nest-scent-at-angle [angle]
-  let p patch-right-and-ahead angle 1
-  if p = nobody [ report 0 ]
-  report [nest-scent] of p
-end
 
 
 
-;;to-report recruitment-probability-red
-;; let z exp (logisticA + (logisticB * distance-red))
-;; let recruit-prob z / (1 + z)
-;; report recruit-prob
-;;end
 
-;;to-report recruitment-probability-blue
-;; let z exp (logisticA + (logisticB * distance-blue))
-;;let recruit-prob z / (1 + z)
-;; report recruit-prob
-;; end
 
-to reset-times
-  set inside-nest-stay-time nest-stay-time
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; Resets
+
+to reset-empty-time
   set empty-flower-time flower-refilling-time
-end
-
-to my-update-plots
-  set-current-plot "Bee_Populations"
-  set-current-plot-pen "red-foragers"
-  plot count red-foragers
-
-  set-current-plot-pen "blue-foragers"
-  plot count blue-foragers
-
-  set-current-plot-pen "generalist-foragers"
-  plot count generalist-foragers
-
-  set-current-plot "Forager_Energy"
-
-  set-current-plot-pen "red-foragers"
-  if any? red-foragers [
-    plot mean [forager-energy] of red-foragers
-  ] 
-    plot 0
-  
-  set-current-plot-pen "red-drinking-bees"
-  if any? red-drinking-bees [
-    plot mean [forager-energy] of red-drinking-bees
-  ] 
-    plot 0
-  
-
-  set-current-plot-pen "red-return-foragers"
-  if any? red-return-foragers [
-    plot mean [forager-energy] of red-return-foragers
-  ] 
-    plot 0
-  
-
-  
-end
-
-]]></code>
+  end]]></code>
   <widgets>
-    <view x="530" wrappingAllowedX="true" y="15" frameRate="30.0" minPycor="-200" height="695" showTickCounter="true" patchSize="1.7232" fontSize="10" wrappingAllowedY="true" width="695" tickCounterLabel="ticks" maxPycor="200" updateMode="0" maxPxcor="200" minPxcor="-200"></view>
-    <button x="5" y="15" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="setup">setup </button>
-    <button x="70" y="15" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="go">go</button>
-    <button x="135" y="15" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="66" display="go">go</button>
-    <slider x="5" step="0.05" y="70" max="1" width="250" display="blue-ratio" height="50" min="0" direction="Horizontal" default="0.25" variable="blue-ratio"></slider>
-    <slider x="265" step="1" y="70" max="100" width="250" display="red-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="red-pollen-grains" units="grains"></slider>
-    <slider x="265" step="1" y="130" max="100" width="250" display="blue-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="blue-pollen-grains" units="grains"></slider>
-    <slider x="5" step="100" y="130" max="10000" width="250" display="total-flowers" height="50" min="0" direction="Horizontal" default="100.0" variable="total-flowers" units="flowers"></slider>
-    <slider x="5" step="1" y="190" max="100" width="250" display="flower-refilling-time" height="50" min="0" direction="Horizontal" default="23.0" variable="flower-refilling-time" units="seconds"></slider>
-    <slider x="5" step="0.002" y="375" max="0.064" width="250" display="MetabolicCosts" height="50" min="0.016" direction="Horizontal" default="0.032" variable="MetabolicCosts"></slider>
-    <slider x="5" step="0.1" y="430" max="3" width="250" display="levy-mu" height="50" min="0" direction="Horizontal" default="1.0" variable="levy-mu"></slider>
-    <slider x="265" step="0.1" y="190" max="10" width="250" display="reward-size-red-flowers" height="50" min="0" direction="Horizontal" default="5.0" variable="reward-size-red-flowers" units="μl"></slider>
-    <slider x="265" step="1" y="430" max="50" width="250" display="crop-capacity-generalist" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-generalist" units="μl"></slider>
-    <slider x="265" step="1" y="375" max="50" width="250" display="crop-capacity-blue" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-blue" units="μl"></slider>
-    <slider x="265" step="1" y="490" max="100" width="250" display="forager-patience" height="50" min="0" direction="Horizontal" default="8.0" variable="forager-patience" units="ticks before switch"></slider>
-    <slider x="265" step="1" y="550" max="100" width="250" display="probability-of-constancy" height="50" min="0" direction="Horizontal" default="43.0" variable="probability-of-constancy" units="%"></slider>
-    <slider x="265" step="1" y="610" max="100" width="250" display="within-trip-constancy" height="50" min="0" direction="Horizontal" default="50.0" variable="within-trip-constancy" units="%"></slider>
-    <slider x="5" step="1" y="485" max="100" width="250" display="flower-stay-timer" height="50" min="0" direction="Horizontal" default="50.0" variable="flower-stay-timer" units="seconds"></slider>
-    <slider x="5" step="1" y="540" max="100" width="250" display="nest-stay-time" height="50" min="0" direction="Horizontal" default="50.0" variable="nest-stay-time"></slider>
-    <slider x="5" step="1" y="320" max="100" width="250" display="number-of-start-bees" height="50" min="0" direction="Horizontal" default="100.0" variable="number-of-start-bees"></slider>
-    <slider x="265" step="1" y="10" max="100" width="250" display="ticks-burn-in" height="50" min="0" direction="Horizontal" default="0.0" variable="ticks-burn-in"></slider>
-    <monitor x="10" precision="17" y="250" height="60" fontSize="11" width="100" display="blue-flowers">count blue-flowers</monitor>
-    <monitor x="120" precision="17" y="250" height="60" fontSize="11" width="100" display="red-flowers">count red-flowers</monitor>
-    <slider x="265" step="1" y="320" max="50" width="250" display="crop-capacity-red" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-red" units="μl"></slider>
-    <slider x="265" step="0.1" y="245" max="10" width="250" display="reward-size-blue-flowers" height="50" min="0" direction="Horizontal" default="5.0" variable="reward-size-blue-flowers" units="μl"></slider>
-    <monitor x="5" precision="17" y="600" height="60" fontSize="11" width="100" display="empty-blue-flowers">count empty-blue-flowers</monitor>
-    <monitor x="115" precision="17" y="600" height="60" fontSize="11" width="100" display="empty-red-flowers">count empty-red-flowers</monitor>
-    <monitor x="5" precision="3" y="740" height="60" fontSize="11" width="100" display="Generalists speed">mean-speed generalist-foragers</monitor>
-    <monitor x="115" precision="3" y="740" height="60" fontSize="11" width="100" display="Red forager speed">mean-speed red-foragers</monitor>
-    <monitor x="230" precision="17" y="740" height="60" fontSize="11" width="100" display="Blue forager speed">mean-speed blue-foragers</monitor>
-    <monitor x="1235" precision="17" y="15" height="60" fontSize="11" width="100" display="blue-foragers">count blue-foragers</monitor>
-    <monitor x="1340" precision="17" y="15" height="60" fontSize="11" width="100" display="red-foragers">count red-foragers</monitor>
-    <monitor x="1445" precision="17" y="15" height="60" fontSize="11" width="100" display="generalist-foragers">count generalist-foragers</monitor>
-    <monitor x="1235" precision="17" y="90" height="60" fontSize="11" width="100" display="blue-return-forager">count blue-return-foragers</monitor>
-    <monitor x="1345" precision="17" y="90" height="60" fontSize="11" width="100" display="red-return-foragers">count red-return-foragers</monitor>
-    <monitor x="1450" precision="17" y="90" height="60" fontSize="11" width="100" display="generalist-return-foragers">count generalist-return-foragers</monitor>
-    <monitor x="1235" precision="17" y="165" height="60" fontSize="11" width="100">move-levy-count</monitor>
-    <monitor x="1345" precision="17" y="165" height="60" fontSize="11" width="100" display="move">move-count</monitor>
-    <monitor x="1455" precision="17" y="240" height="60" fontSize="11" width="100" display="generalist-drinking-bees">count generalist-drinking-bees</monitor>
-    <monitor x="1350" precision="17" y="240" height="60" fontSize="11" width="100" display="red-drinking-bees">count red-drinking-bees</monitor>
-    <monitor x="1240" precision="17" y="235" height="60" fontSize="11" width="100" display="blue-drinking-bees">count blue-drinking-bees</monitor>
+    <view x="368" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-200" height="434" showTickCounter="true" patchSize="1.7232" fontSize="10" wrappingAllowedY="true" width="434" tickCounterLabel="ticks" maxPycor="200" updateMode="0" maxPxcor="200" minPxcor="-200"></view>
+    <monitor x="1455" precision="17" y="235" height="60" fontSize="11" width="100" display="generalist-drinking-bees">count generalist-drinking-bees</monitor>
+    <monitor x="1350" precision="17" y="235" height="60" fontSize="11" width="100" display="red-drinking-bees">count red-drinking-bees</monitor>
+    <monitor x="1240" precision="17" y="230" height="60" fontSize="11" width="100" display="blue-drinking-bees">count blue-drinking-bees</monitor>
+    <monitor x="1345" precision="17" y="160" height="60" fontSize="11" width="100" display="move">move-count</monitor>
+    <monitor x="1235" precision="17" y="160" height="60" fontSize="11" width="100">move-levy-count</monitor>
+    <monitor x="1450" precision="17" y="85" height="60" fontSize="11" width="100" display="generalist-return-foragers">count generalist-return-foragers</monitor>
+    <monitor x="1345" precision="17" y="85" height="60" fontSize="11" width="100" display="red-return-foragers">count red-return-foragers</monitor>
+    <monitor x="1235" precision="17" y="85" height="60" fontSize="11" width="100" display="blue-return-forager">count blue-return-foragers</monitor>
+    <monitor x="1445" precision="17" y="10" height="60" fontSize="11" width="100" display="generalist-foragers">count generalist-foragers</monitor>
+    <monitor x="1340" precision="17" y="10" height="60" fontSize="11" width="100" display="red-foragers">count red-foragers</monitor>
+    <monitor x="1235" precision="17" y="10" height="60" fontSize="11" width="100" display="blue-foragers">count blue-foragers</monitor>
+    <slider x="265" step="1" y="5" max="100" width="250" display="ticks-burn-in" height="50" min="0" direction="Horizontal" default="50.0" variable="ticks-burn-in"></slider>
+    <slider x="265" step="1" y="65" max="100" width="250" display="red-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="red-pollen-grains" units="grains"></slider>
+    <slider x="265" step="1" y="125" max="100" width="250" display="blue-pollen-grains" height="50" min="0" direction="Horizontal" default="50.0" variable="blue-pollen-grains" units="grains"></slider>
+    <slider x="265" step="0.1" y="185" max="10" width="250" display="reward-size-red-flowers" height="50" min="0" direction="Horizontal" default="10.0" variable="reward-size-red-flowers" units="μl"></slider>
+    <slider x="265" step="0.1" y="240" max="10" width="250" display="reward-size-blue-flowers" height="50" min="0" direction="Horizontal" default="10.0" variable="reward-size-blue-flowers" units="μl"></slider>
+    <slider x="265" step="1" y="315" max="50" width="250" display="crop-capacity-red" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-red" units="μl"></slider>
+    <slider x="265" step="1" y="370" max="50" width="250" display="crop-capacity-blue" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-blue" units="μl"></slider>
+    <slider x="265" step="1" y="425" max="50" width="250" display="crop-capacity-generalist" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-generalist" units="μl"></slider>
+    <slider x="265" step="1" y="485" max="100" width="250" display="forager-patience" height="50" min="0" direction="Horizontal" default="50.0" variable="forager-patience" units="ticks before switch"></slider>
+    <slider x="265" step="1" y="545" max="100" width="250" display="probability-of-constancy" height="50" min="0" direction="Horizontal" default="50.0" variable="probability-of-constancy" units="%"></slider>
+    <slider x="265" step="1" y="605" max="100" width="250" display="within-trip-constancy" height="50" min="0" direction="Horizontal" default="50.0" variable="within-trip-constancy" units="%"></slider>
+    <monitor x="230" precision="17" y="735" height="60" fontSize="11" width="100" display="Blue forager speed">mean-speed blue-foragers</monitor>
+    <monitor x="115" precision="3" y="735" height="60" fontSize="11" width="100" display="Red forager speed">mean-speed red-foragers</monitor>
+    <monitor x="5" precision="3" y="735" height="60" fontSize="11" width="100" display="Generalists speed">mean-speed generalist-foragers</monitor>
+    <monitor x="115" precision="17" y="595" height="60" fontSize="11" width="100" display="empty-red-flowers">count empty-red-flowers</monitor>
+    <monitor x="5" precision="17" y="595" height="60" fontSize="11" width="100" display="empty-blue-flowers">count empty-blue-flowers</monitor>
+    <slider x="5" step="1" y="535" max="100" width="250" display="nest-stay-time" height="50" min="0" direction="Horizontal" default="50.0" variable="nest-stay-time"></slider>
+    <slider x="5" step="1" y="480" max="100" width="250" display="flower-stay-timer" height="50" min="0" direction="Horizontal" default="50.0" variable="flower-stay-timer" units="seconds"></slider>
+    <slider x="5" step="0.1" y="425" max="3" width="250" display="levy-mu" height="50" min="0" direction="Horizontal" default="3.0" variable="levy-mu"></slider>
+    <slider x="5" step="0.002" y="370" max="0.064" width="250" display="MetabolicCosts" height="50" min="0.016" direction="Horizontal" default="0.064" variable="MetabolicCosts"></slider>
+    <slider x="5" step="1" y="315" max="100" width="250" display="number-of-start-bees" height="50" min="0" direction="Horizontal" default="50.0" variable="number-of-start-bees"></slider>
+    <monitor x="120" precision="17" y="245" height="60" fontSize="11" width="100" display="red-flowers">count red-flowers</monitor>
+    <monitor x="10" precision="17" y="245" height="60" fontSize="11" width="100" display="blue-flowers">count blue-flowers</monitor>
+    <slider x="5" step="1" y="185" max="100" width="250" display="flower-refilling-time" height="50" min="0" direction="Horizontal" default="50.0" variable="flower-refilling-time" units="seconds"></slider>
+    <slider x="5" step="100" y="125" max="10000" width="250" display="total-flowers" height="50" min="0" direction="Horizontal" default="100.0" variable="total-flowers" units="flowers"></slider>
+    <slider x="5" step="0.05" y="65" max="1" width="250" display="blue-ratio" height="50" min="0" direction="Horizontal" default="1.0" variable="blue-ratio"></slider>
+    <button x="135" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="66" display="go">go</button>
+    <button x="70" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="go">go</button>
+    <button x="5" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55" display="setup">setup </button>
   </widgets>
   <info>## WHAT IS IT?
 
