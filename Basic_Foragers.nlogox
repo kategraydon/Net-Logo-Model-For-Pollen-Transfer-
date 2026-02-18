@@ -166,8 +166,7 @@ to go
   
   ask red-flowers [
       if any? generalist-foragers-here [
-      be-eaten-red 
-    ]
+      be-eaten-red ]
     if any? red-foragers-here [
       be-eaten-red ]
     set shape "flower"
@@ -176,9 +175,9 @@ to go
     
   ask blue-flowers [
         if any? generalist-foragers-here [
-      be-eaten-red 
-    ]
+      be-eaten-blue ]
     if any? blue-foragers-here [
+
       be-eaten-blue ]
     set shape "flower"
     set color blue
@@ -352,20 +351,20 @@ ask return-blue-foragers [
 
 ask generalist-inside-nest-workers [
     set color white
+     set shape "butterfly"
     move-inside-nest
     wiggle
-    set shape "butterfly"
-    set size 10
+    set size 6
     set inside-nest-stay-time inside-nest-stay-time - 1
     if inside-nest-stay-time < 0
     [set breed generalist-foragers
       unload-generalist ]]
 
 ask red-inside-nest-workers [
-    set color pink
+     set color red
+    set shape "butterfly"
     move-inside-nest
     wiggle
-    set shape "butterfly"
     set size 6
     set inside-nest-stay-time inside-nest-stay-time - 1
     ifelse inside-nest-stay-time < 0
@@ -375,7 +374,8 @@ ask red-inside-nest-workers [
     [ unload-red ]]
 
 ask blue-inside-nest-workers [
-    set color pink
+    set color blue
+    set shape "butterfly"
     move-inside-nest
     wiggle
     set shape "butterfly"
@@ -387,6 +387,18 @@ ask blue-inside-nest-workers [
       reset-times ]
     [ unload-blue ]]
   
+ ask red-influencers [
+      set color red
+    set shape "butterfly"
+    set size 6  if inside-nest-stay-time > 0 [ set breed red-inside-nest-workers ]]
+  
+  ask blue-influencers [
+      set color red
+    set shape "butterfly"
+    set size 6 
+   if inside-nest-stay-time > 0
+    [set breed blue-inside-nest-workers ]]
+  
  tick
 end
 
@@ -395,8 +407,13 @@ end
 ;; Flower Procedure
 
 to be-eaten-red
+  if any? red-foragers-here [ set eaten-by-red-forager eaten-by-red-forager + 1 ]
+  if any? generalist-foragers-here [ set eaten-by-generalist-forager eaten-by-generalist-forager + 1 ]
   if any? generalist-foragers-here [
    record-bee-visit-flower
+   ; ask generalist-foragers-here [
+   ;   set
+    
     set breed empty-red-flowers
   ]
   if any? red-foragers-here [
@@ -407,6 +424,8 @@ end
 
 
 to be-eaten-blue
+  if any? blue-foragers-here [ set eaten-by-blue-forager eaten-by-blue-forager + 1 ]
+  if any? generalist-foragers-here [ set eaten-by-generalist-forager eaten-by-generalist-forager + 1 ]
   if any? generalist-foragers-here [
     record-bee-visit-flower
     set breed empty-blue-flowers
@@ -472,8 +491,10 @@ end
 
 to eat-red-flower
   if any? red-flowers-here [
-    set forager-energy forager-energy + reward-size-red-flowers
-    record-bee-visit-flower
+     if drinking-time  = flower-stay-timer
+    [set flower-visits-red flower-visits-red + 1 ]   
+    set forager-energy forager-energy + reward-size-red-flowers * 5.814
+    ask red-flowers-here [record-bee-visit-flower]
     set breed red-drinking-bees
 
      ]
@@ -481,8 +502,10 @@ end
 
 to eat-blue-flower
   if any? blue-flowers-here [
-    set forager-energy forager-energy + reward-size-blue-flowers
-    record-bee-visit-flower
+    if drinking-time  = flower-stay-timer 
+    [set flower-visits-blue flower-visits-blue + 1 ]
+    set forager-energy forager-energy + reward-size-blue-flowers * 5.814
+    ask blue-flowers-here [record-bee-visit-flower]
     set breed blue-drinking-bees
                       ]
 end
@@ -492,7 +515,7 @@ end
 
 to find-empty-red-flower
   if any? empty-red-flowers-here [
-     ask empty-red-flowers-here [
+     ask empty-red-flowers-here [    
     record-bee-visit-flower
     ]
     set empty-flowers-per-trip empty-flowers-per-trip + 1
@@ -513,27 +536,27 @@ end
 to unload-generalist                                                          ;; procedure at the nest: transfer forager energy to nest
   set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
   set forager-energy 0                                             ;; reset forager-energy to 0 (all energy has been transferred to nest)
- ; set foraging-trips-generalist-bees foraging-trips-generalist-bees + trip-generalist
- ; set trip-generalist 0
+ ;set foraging-trips-generalist-bees foraging-trips-generalist-bees + trip-generalist
+;  set trip-generalist 0
   set total-empty-flowers total-empty-flowers + empty-flowers-per-trip    ;; 13/7/2022
-  set empty-flowers-per-trip 0                                      ;; 13/7/2022
+ ; set empty-flowers-per-trip 0                                      ;; u 13/7/2022
 end
 
 to unload-red                                                          ;; procedure at the nest: transfer forager energy to nest
   set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
   set forager-energy 0                                             ;; reset forager-energy to 0 (all energy has been transferred to nest)
- ; set foraging-trips-red-bees foraging-trips-red-bees + trip-red
- ; set trip-red 0                            
+ ;set foraging-trips-red-bees foraging-trips-red-bees + trip-red
+ ;set trip-red 0                            
   set total-empty-flowers total-empty-flowers + empty-flowers-per-trip    ;; 13/7/2022
-  set empty-flowers-per-trip 0                                      ;; 13/7/2022
+ ; set empty-flowers-per-trip 0                                      ;; 13/7/2022
 end
 
 
 to unload-blue                                                          ;; procedure at the nest: transfer forager energy to nest
   set nest-energy nest-energy + forager-energy                     ;; turnover energy (positive and negative values possible)
   set forager-energy 0                                             ;; reset forager-energy to 0 (all energy has been transferred to nest)
- ; set foraging-trips-blue-bees foraging-trips-blue-bees + trip-blue
- ; set trip-blue 0                                 ;; 30/4/2021
+; set foraging-trips-blue-bees foraging-trips-blue-bees + trip-blue
+ ;set trip-blue 0                                 ;; 30/4/2021
   set total-empty-flowers total-empty-flowers + empty-flowers-per-trip    ;; 13/7/2022
   set empty-flowers-per-trip 0                                      ;; 13/7/2022
 end
@@ -581,7 +604,6 @@ end
 ;; Recording flower visits
 to record-bee-visit-flower
 
-  ;; increment by breed "red-flowers"
   if breed = red-flowers [
     let current-red table:get flower-counts "total-visits-red-flowers"
     table:put flower-counts "total-visits-red-flowers" (current-red + 1)
@@ -651,8 +673,8 @@ end
     <monitor x="5" precision="17" y="245" height="60" fontSize="11" width="100" display="blue-flowers">count blue-flowers</monitor>
     <monitor x="110" precision="17" y="245" height="60" fontSize="11" width="100" display="red-flowers">count red-flowers</monitor>
     <monitor x="140" precision="17" y="310" height="60" fontSize="11" width="125" display="empty-red-flowers">count empty-red-flowers</monitor>
-    <slider x="270" step="1" y="10" max="100" width="250" display="ticks-burn-in" height="50" min="0" direction="Horizontal" default="50.0" variable="ticks-burn-in"></slider>
-    <slider x="275" step="1" y="485" max="100" width="250" display="nest-stay-time" height="50" min="0" direction="Horizontal" default="50.0" variable="nest-stay-time"></slider>
+    <slider x="270" step="1" y="10" max="100" width="250" display="ticks-burn-in" height="50" min="0" direction="Horizontal" default="0.0" variable="ticks-burn-in"></slider>
+    <slider x="275" step="1" y="485" max="1000" width="250" display="nest-stay-time" height="50" min="0" direction="Horizontal" default="679.0" variable="nest-stay-time"></slider>
     <slider x="275" step="1" y="370" max="50" width="250" display="crop-capacity-blue" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-blue" units="μl"></slider>
     <slider x="275" step="1" y="425" max="50" width="250" display="crop-capacity-generalist" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-generalist" units="μl"></slider>
     <slider x="275" step="1" y="310" max="50" width="250" display="crop-capacity-red" height="50" min="0" direction="Horizontal" default="50.0" variable="crop-capacity-red" units="μl"></slider>
